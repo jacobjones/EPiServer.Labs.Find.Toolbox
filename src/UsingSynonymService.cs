@@ -39,16 +39,16 @@ namespace EPiServer.Find.Cms
                 {
                     BoolQuery newBoolQuery = new BoolQuery();
                     BoolQuery currentBoolQuery;
-                    MinShouldMatchQueryStringQuery currentMinShouldMatchQueryStringQuery;
+                    QueryStringQuery currentQueryStringQuery;
 
-                    if (!QueryHelpers.GetFirstQueryStringQuery(context, out currentMinShouldMatchQueryStringQuery, out currentBoolQuery))
+                    if (!QueryHelpers.GetFirstQueryStringQuery(context, out currentQueryStringQuery, out currentBoolQuery))
                     {
                         // Synonyms are only supported for QueryStringQuery
                         Find.Tracing.Trace.Instance.Add(new TraceEvent(search, "The use of synonyms are only supported for QueryStringQueries, i.e. with the use of the .For() -extensions. The query will be executed without the use of synonyms.") { IsError = false });
                         return;
                     }                  
 
-                    var query = QueryHelpers.GetRawQueryString(currentMinShouldMatchQueryStringQuery);
+                    var query = QueryHelpers.GetRawQueryString(currentQueryStringQuery);
                     if (query.IsNullOrEmpty())
                     {
                         return;
@@ -70,17 +70,20 @@ namespace EPiServer.Find.Cms
                     // Add non expanded query. Using the custom MinimumShouldMatch if set.
                     if (queryNonExpanded.IsNotNullOrEmpty())
                     {
-                        var minShouldMatchQuery = CreateMinShouldMatchQueryStringQuery(queryNonExpanded, true, "", currentMinShouldMatchQueryStringQuery);
-                            
-                        // MinimumShouldMatch() overrides WithAndAsDefaultOperator()
-                        if (currentMinShouldMatchQueryStringQuery.MinimumShouldMatch.IsNotNullOrEmpty())
+                        var minShouldMatchQuery = CreateMinShouldMatchQueryStringQuery(queryNonExpanded, true, "", currentQueryStringQuery);
+
+                        if (currentQueryStringQuery is MinShouldMatchQueryStringQuery currentMinShouldMatchQueryStringQuery)
                         {
-                            minShouldMatchQuery.MinimumShouldMatch = currentMinShouldMatchQueryStringQuery.MinimumShouldMatch;
-                        }
-                        // Emulate WithAndAsDefaultOperator() using MinimumShouldMatch set to 100%
-                        else if (currentMinShouldMatchQueryStringQuery.DefaultOperator == BooleanOperator.And)
-                        {
-                            minShouldMatchQuery.MinimumShouldMatch = "100%";
+                            // MinimumShouldMatch() overrides WithAndAsDefaultOperator()
+                            if (currentMinShouldMatchQueryStringQuery.MinimumShouldMatch.IsNotNullOrEmpty())
+                            {
+                                minShouldMatchQuery.MinimumShouldMatch = currentMinShouldMatchQueryStringQuery.MinimumShouldMatch;
+                            }
+                            // Emulate WithAndAsDefaultOperator() using MinimumShouldMatch set to 100%
+                            else if (currentMinShouldMatchQueryStringQuery.DefaultOperator == BooleanOperator.And)
+                            {
+                                minShouldMatchQuery.MinimumShouldMatch = "100%";
+                            }
                         }
 
                         // We save all variations of queries with and without synonym expansions
@@ -93,7 +96,7 @@ namespace EPiServer.Find.Cms
                     // Add expanded query. MinimumShouldMatch is always 1 here. 
                     if (queryExpanded.IsNotNullOrEmpty())
                     {
-                        var minShouldMatchQuery = CreateMinShouldMatchQueryStringQuery(queryExpanded, false, "1", currentMinShouldMatchQueryStringQuery);
+                        var minShouldMatchQuery = CreateMinShouldMatchQueryStringQuery(queryExpanded, false, "1", currentQueryStringQuery);
                         newBoolQuery.Should.Add(minShouldMatchQuery);
                     }
 
@@ -128,7 +131,7 @@ namespace EPiServer.Find.Cms
             });
         }        
 
-        private static MinShouldMatchQueryStringQuery CreateMinShouldMatchQueryStringQuery(string query, bool autoGeneratePhraseQueries, string minShouldMatch, MultiFieldQueryStringQuery currentQueryStringQuery)
+        private static MinShouldMatchQueryStringQuery CreateMinShouldMatchQueryStringQuery(string query, bool autoGeneratePhraseQueries, string minShouldMatch, QueryStringQuery currentQueryStringQuery)
         {            
             var minShouldMatchQuery = new MinShouldMatchQueryStringQuery(QueryHelpers.EscapeElasticSearchQuery(query));
 
@@ -144,7 +147,7 @@ namespace EPiServer.Find.Cms
             minShouldMatchQuery.LowercaseExpandedTerms = currentQueryStringQuery.LowercaseExpandedTerms;
             minShouldMatchQuery.PhraseSlop = currentQueryStringQuery.PhraseSlop;
             minShouldMatchQuery.DefaultField = currentQueryStringQuery.DefaultField;
-            minShouldMatchQuery.Fields = currentQueryStringQuery.Fields;
+            minShouldMatchQuery.Fields = (currentQueryStringQuery as MultiFieldQueryStringQuery)?.Fields;
 
             minShouldMatchQuery.MinimumShouldMatch = minShouldMatch.IsNotNullOrEmpty() ? minShouldMatch : "1";
             minShouldMatchQuery.DefaultOperator = BooleanOperator.Or;

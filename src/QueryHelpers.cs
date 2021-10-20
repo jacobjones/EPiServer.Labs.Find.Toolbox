@@ -33,7 +33,7 @@ namespace EPiServer.Find
             return s.Replace("-", "\\-");
         }     
 
-        public static bool GetFirstQueryStringQuery(ISearchContext context, out MinShouldMatchQueryStringQuery currentMinShouldMatchQueryStringQuery, out BoolQuery currentBoolQuery)
+        public static bool GetFirstQueryStringQuery(ISearchContext context, out QueryStringQuery currentQueryStringQuery, out BoolQuery currentBoolQuery)
         {
             IQuery currentQuery;
 
@@ -47,64 +47,21 @@ namespace EPiServer.Find
                 currentQuery = context.RequestBody.Query;
             }
 
-            // Try get MinShouldMatchQueryStringQuery 
-            if (TryGetMinShouldMatchQueryStringQuery(currentQuery, out currentMinShouldMatchQueryStringQuery))
-            {                   
-                return true;
-            }
-            
-            // Try get MultiFiledQueryStringQuery and convert to MinShouldMatchQueryString because this is what all features in Toolbox work with
-            if (TryGetMultiFieldQueryStringQuery(currentQuery, out MultiFieldQueryStringQuery currentMultiFieldQueryStringQuery))
+            switch (currentQuery)
             {
-                // Convert to MinShouldMatchQueryStringQuery
-                currentMinShouldMatchQueryStringQuery = new MinShouldMatchQueryStringQuery(currentMultiFieldQueryStringQuery.Query);
-                return true;
+                case MinShouldMatchQueryStringQuery minShouldMatchQueryStringQuery:
+                    currentQueryStringQuery = minShouldMatchQueryStringQuery;
+                    return true;
+                case MultiFieldQueryStringQuery multiFieldQueryStringQuery:
+                    currentQueryStringQuery = multiFieldQueryStringQuery;
+                    return true;
+                case QueryStringQuery queryStringQuery:
+                    currentQueryStringQuery = queryStringQuery;
+                    return true;
+                default:
+                    currentQueryStringQuery = null;
+                    return false;
             }
-
-            // Try get MultiFiledQueryStringQuery and convert to MinShouldMatchQueryString because this is what all features in Toolbox work with
-            if (TryGetQueryStringQuery(currentQuery, out QueryStringQuery currentQueryStringQuery))
-            {
-                // Convert to MinShouldMatchQueryStringQuery
-                currentMinShouldMatchQueryStringQuery = new MinShouldMatchQueryStringQuery(currentQueryStringQuery.Query);
-                return true;
-            }
-
-            return false;
-        }
-
-        public static bool TryGetMinShouldMatchQueryStringQuery(IQuery query, out MinShouldMatchQueryStringQuery currentMinShouldMatchQueryStringQuery)
-        {
-
-            currentMinShouldMatchQueryStringQuery = query as MinShouldMatchQueryStringQuery;
-            if (currentMinShouldMatchQueryStringQuery == null)
-            {
-                return false;
-            }
-            return true;
-
-        }
-
-        public static bool TryGetMultiFieldQueryStringQuery(IQuery query, out MultiFieldQueryStringQuery currentMinShouldMatchQueryStringQuery) {
-
-            currentMinShouldMatchQueryStringQuery = query as MinShouldMatchQueryStringQuery;
-            if (currentMinShouldMatchQueryStringQuery == null)
-            {
-                return false;
-            }
-            return true;
-
-        }
-
-        public static bool TryGetQueryStringQuery(IQuery query, out QueryStringQuery currentQueryStringQuery)
-        {
-
-            currentQueryStringQuery = query as QueryStringQuery;
-            if (currentQueryStringQuery == null)
-            {
-                return false;
-            }            
-            return true;
-
         }
 
         public static bool TryGetBoolQuery(IQuery query, out BoolQuery currentBoolQuery)
@@ -130,10 +87,11 @@ namespace EPiServer.Find
             return (currentQueryStringQuery.Query.ToString().Trim() ?? string.Empty).ToString();
         }
 
-        public static string GetRawQueryString(MultiFieldQueryStringQuery currentQueryStringQuery)
+        public static string GetRawQueryString(QueryStringQuery currentQueryStringQuery)
         {
             return (currentQueryStringQuery.RawQuery ?? string.Empty).Trim().ToString();
         }
+
         public static bool IsStringQuoted(string text)
         {
             return (text.StartsWith("\"") && text.EndsWith("\""));
